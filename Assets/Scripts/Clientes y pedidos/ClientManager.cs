@@ -65,18 +65,54 @@ public class ClientManager
 
     public static bool CheckLackOfStock(List<Customer> queue, HashSet<string> availableItems, float maxTimeSlice)
     {
-        // En una aplicación real, aquí iterarías sobre un gran conjunto de datos
-        // y usarías un temporizador para hacer 'yield return' o pausar si el tiempoMaximoSlice se agota.
+        // En una aplicaciï¿½n real, aquï¿½ iterarï¿½as sobre un gran conjunto de datos
+        // y usarï¿½as un temporizador para hacer 'yield return' o pausar si el tiempoMaximoSlice se agota.
 
-        // Para el parcial, demostramos la intención de usar 'Any'
-        // para buscar una condición que detenga la ejecución tan pronto como se encuentre.
+        // Para el parcial, demostramos la intenciï¿½n de usar 'Any'
+        // para buscar una condiciï¿½n que detenga la ejecuciï¿½n tan pronto como se encuentre.
 
 
         return queue.Any(c =>
-        c.order.Any(item => !availableItems.Contains(item))
+            c.order.Any(item => !availableItems.Contains(item))
         );
 
-        // Mantenemos la documentación de que esta función es parte del proceso de
+        // Mantenemos la documentaciï¿½n de que esta funciï¿½n es parte del proceso de
         // Time-Slicing para el chequeo de la cola.
+    }
+
+    public string GetQueueHealthReport(List<Customer> queueClients)
+    {
+        var report = CalcularAggregate(queueClients);
+        var sb = new StringBuilder();
+
+        if (report.Any())
+        {
+            sb.AppendLine("--- Queue Health Report ---");
+            foreach (var state in report)
+            {
+                sb.AppendLine($"Category: {state.largestOrderItem ?? "Mixed"}");
+                sb.AppendLine($"  Clients: {state.clientsCount}");
+                sb.AppendLine($"  Avg Wait: {state.averageWaitTime:F2}s");
+            }
+
+            // Muestra el grupo mÃ¡s problemÃ¡tico (el que tiene el mayor tiempo promedio de espera)
+            var worstGroup = report.First();
+            sb.AppendLine(
+                $"\n!! Critical Alert: {worstGroup.largestOrderItem} (Avg: {worstGroup.averageWaitTime:F2}s)");
+        }
+        else
+        {
+            sb.AppendLine("Queue is empty. All clear!");
+        }
+
+        return sb.ToString();
+    }
+
+    public int GetNextPriorityClientID(List<Customer> queue)
+    {
+        // Llama al generator para obtener el primer cliente en la secuencia ordenada
+        var priorityCustomer = GetPriorityOrders(queue).FirstOrDefault();
+
+        return priorityCustomer?.ID ?? -1; // Devuelve el ID o -1 si la cola estÃ¡ vacÃ­a
     }
 }
