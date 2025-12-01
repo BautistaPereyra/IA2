@@ -19,19 +19,38 @@ public class FinanceManager
 
     public List<ProfitabilityReport> GenerateAggregateProfit(List<Sale> closedWindows)
     {
-        return closedWindows
-            .SelectMany(s => s.SoldItems.Select(item => new { Item = item, Sale = s }))
-            .GroupBy(x => x.Item.Category) // Agrupa por la Categoría del Producto
-            .Select(g => new ProfitabilityReport
+        // Aplanamos primero las ventas a items individuales
+        var allSoldItems = closedWindows.SelectMany(s => s.SoldItems);
+
+        // Acumulador: Dictionary<Categoria, (Ingreso, Costo)>
+        var rawStats = allSoldItems.Aggregate(
+            new Dictionary<string, (decimal income, decimal cost)>(), // Semilla
+            (acc, item) =>
             {
-                Category = g.Key,
-                // Aggregate: Suma de Ingresos para esta categoría
-                TotalIncome = g.Sum(x => x.Item.SellPrice),
-                // Aggregate: Suma de Costos para esta categoría
-                TotalCost = g.Sum(x => x.Item.RestokeCost)
-            })
-            .OrderByDescending(r => r.NetProfit)
-            .ToList();
+                // Lógica de agrupación
+                string cat = item.Category;
+
+                if (!acc.ContainsKey(cat))
+                    acc[cat] = (0m, 0m);
+
+                // Acumulación compleja
+                acc[cat] = (
+                    acc[cat].income + item.SellPrice,
+                    acc[cat].cost + item.RestokeCost
+                );
+
+                return acc;
+            });
+
+        // Proyección final
+        return rawStats.Select(kvp => new ProfitabilityReport
+        {
+            Category = kvp.Key,
+            TotalIncome = kvp.Value.income,
+            TotalCost = kvp.Value.cost
+        })
+        .OrderByDescending(r => r.NetProfit)
+        .ToList();
     }
     public IEnumerable<Sale> GetTopNTransactions(List<Sale> saleLogs, int N)
     {
@@ -48,31 +67,43 @@ public class FinanceManager
         // 2. Take: Solo consume los primeros N elementos del flujo generado.
         return SaleFLow().Take(N);
     }
+    public List<Sale> GetHighValueSales(List<Sale> sales)
+    {
+        return sales
+            .Where(s => s.TotalIncome > 50m)          // G1: Where
+            .OrderByDescending(s => s.TotalIncome)    // G2: OrderByDescending
+            .ToList();                                // G3: ToList
+    }
     public IEnumerable<decimal> CalculateGrossMarginPerItem(List<decimal> salePrice, List<decimal> restokeCost)
     {
         // Combina elemento a elemento las dos listas (precioVenta - costoReposicion)
         return salePrice.Zip(restokeCost, (sale, cost) => sale - cost);
     }
-    public List<Sale> CloseBatchTransactions(Queue<Sale> transactionsPendings, int maxTransactionsPerSlice)
+    public IEnumerator ProcessTransactionsRoutine(Queue<Sale> transactionsPendings, float maxTimeSlice, Action<List<Sale>> onBatchComplete)
     {
-        var processedTransactions = new List<Sale>();
-        int count = 0;
+        var processedBatch = new List<Sale>();
+        float timer = Time.realtimeSinceStartup;
 
-        // Aquí se implementa el Time-Slicing: solo procesamos 'maxTransaccionesPorSlice' por llamada
-        while (transactionsPendings.Count > 0 && count < maxTransactionsPerSlice)
+        // Mientras queden transacciones...
+        while (transactionsPendings.Count > 0)
         {
-            var sale = transactionsPendings.Dequeue();
-        
-            // Simulación de un cálculo pesado
-            // ... Lógica para verificar impuestos y comisiones ...
+            // Chequeo de tiempo (Time-Slicing)
+            if (Time.realtimeSinceStartup - timer > maxTimeSlice)
+            {
+                yield return null; // Esperar al siguiente frame
+                timer = Time.realtimeSinceStartup;
+            }
 
-            processedTransactions.Add(sale);
-            count++;
+            var sale = transactionsPendings.Dequeue();
+
+            // Simulación de proceso pesado (impuestos, analíticas, etc.)
+            // ...
+
+            processedBatch.Add(sale);
         }
 
-        // El resultado final del "slice" se convierte a List, cumpliendo el requisito G3.
-        // En el GameLoop, esta lista parcial se sumaría al balance general.
-        return processedTransactions.ToList(); 
+        // Devolvemos el lote procesado al finalizar
+        onBatchComplete?.Invoke(processedBatch);
     }
     public (decimal DaylyGain, decimal DaylySpending) GetDaylyBalance(List<Sale> sales, List<decimal> costs)
     {

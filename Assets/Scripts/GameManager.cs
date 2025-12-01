@@ -29,8 +29,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] private CustomerSpawner _customerSpawner;
 
     public List<decimal> DailyExpenses = new List<decimal>();
-
     private float _maxPatienceTime = 30f;
+
+    private bool _isCheckingStock = false;
+    private bool _isProcessingSales = false;
 
     void Start()
     {
@@ -229,20 +231,64 @@ public class GameManager : MonoBehaviour
 // C. Implementar Slices de Mantenimiento (I3 Time-Slicing)
     private void RunMaintenanceSlices()
     {
-        // 1. I3: Ejecutar el Time-Slicing de transacciones
-        if (PendingSalesQueue.Count > 0)
+        // 1. I3: Finanzas (Time-Slicing interno)
+        if (PendingSalesQueue.Count > 0 && !_isProcessingSales)
         {
-            // Se procesan un máximo de 5 transacciones por frame/tick
-            var processed = _financeManager.CloseBatchTransactions(PendingSalesQueue, 5); // ToList + Time-Slicing I3
-            CompletedSalesLog.AddRange(processed);
-            Debug.Log($"Processed {processed.Count} sales in this slice.");
+            _isProcessingSales = true;
+
+            StartCoroutine(_financeManager.ProcessTransactionsRoutine(PendingSalesQueue, 0.01f, (processedBatch) =>
+            {
+                // Callback al terminar el lote
+                CompletedSalesLog.AddRange(processedBatch);
+                Debug.Log($"Finance: Processed {processedBatch.Count} sales.");
+
+                _isProcessingSales = false; // Desbloqueamos
+            }));
+            // Debug.Log($"Processed {processed.Count} sales.");
         }
 
-        // 2. I2: Revisar inventario con SkipWhile (Time-Slicing)
-        var lowStockProducts = _inventoryManager.ObtenerProductosBajoStock(MasterInventory).ToList();
+        // 2. I2: Revisar inventario (LINQ Combo G1+G2+G3)
+        // NOTA: Quitamos el .ToList() extra porque el método ya devuelve una List
+        var lowStockProducts = _inventoryManager.ObtenerProductosBajoStock(MasterInventory);
+
         if (lowStockProducts.Count > 0)
         {
-            Debug.Log($"ALERT! Low stock products found: {lowStockProducts.First().Name}");
+            // Solo mostramos el primero para ejemplo
+            // Debug.Log($"ALERT! Low stock: {lowStockProducts.First().Name}");
+        }
+
+        // --- 3. I1 e I2: TIME-SLICING CON COROUTINAS ---
+
+        // Usamos una bandera para no iniciar las coroutinas 60 veces por segundo
+        if (!_isCheckingStock)
+        {
+            _isCheckingStock = true; // Bloqueamos
+
+            // A. Coroutina de Inventario (I2)
+            // Se ejecuta en paralelo a la de abajo.
+            StartCoroutine(_inventoryManager.CheckInventoryHealthRoutine(MasterInventory, 0.02f, (productCritico) =>
+            {
+                Debug.LogError($"CRITICAL STOCK: {productCritico.Name} is empty!");
+                // Aquí podrías actualizar un ícono de alerta en la UI del producto
+            }));
+
+            // B. Coroutina de Clientes (I1)
+            // Preparamos datos optimizados
+            var availableItems = MasterInventory
+                .Where(p => p.CurrentStock > 0)
+                .Select(p => p.Name)
+                .ToHashSet();
+
+            // Lanzamos la coroutina. Esta es la que controla el "Cooldown" (desbloquea la bandera al terminar)
+            StartCoroutine(_clientManager.CheckLackOfStock(ClientsInQueue, availableItems, 0.016f, (faltaStock) =>
+            {
+                if (faltaStock)
+                {
+                    Debug.LogWarning("CRITICAL: Clientes esperando productos sin stock.");
+                }
+
+                _isCheckingStock = false; // ¡Desbloqueamos para el próximo ciclo!
+            }));
         }
     }
 

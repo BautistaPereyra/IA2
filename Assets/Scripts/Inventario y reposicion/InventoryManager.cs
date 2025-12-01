@@ -18,35 +18,66 @@ public class InventoryManager
 
     public List<DangerReport> GenerarAggregatePeligro(List<Product> inventory)
     {
-        return inventory
-            .GroupBy(p =>
-            {
-                // Definición de la Zona de Peligro
-                float percentage = (float)p.CurrentStock / p.MaxStock;
-                if (percentage <= 0.10f) return "Crítico"; // Stock < 10%
-                if (percentage <= 0.50f) return "Bajo"; // Stock entre 10% y 50%
-                return "Normal";
-            })
-            .Select(g => new DangerReport
-            {
-                DangerZone = g.Key,
-                TotalProducts = g.Count(),
-                // Usamos el Aggregate 'Average' para el porcentaje promedio.
-                StockRate = g.Average(p => (float)p.CurrentStock / p.MaxStock) * 100
-            })
-            .OrderBy(r => r.DangerZone) // Opcional: ordenar por prioridad
-            .ToList();
+        var rawStats = inventory.Aggregate(
+             new Dictionary<string, (int count, float sumPct)>(), // Semilla
+             (acc, p) =>
+             {
+                 // Lógica de clasificación dentro del Aggregate
+                 float percentage = (float)p.CurrentStock / p.MaxStock;
+                 string zone = "Normal";
+
+                 if (percentage <= 0.10f) zone = "Crítico";
+                 else if (percentage <= 0.50f) zone = "Bajo";
+
+                 if (!acc.ContainsKey(zone))
+                     acc[zone] = (0, 0f);
+
+                 // Acumulamos
+                 acc[zone] = (acc[zone].count + 1, acc[zone].sumPct + percentage);
+
+                 return acc;
+             });
+
+        // Proyección final
+        return rawStats.Select(kvp => new DangerReport
+        {
+            DangerZone = kvp.Key,
+            TotalProducts = kvp.Value.count,
+            StockRate = (kvp.Value.sumPct / kvp.Value.count) * 100 // Promedio
+        })
+        .OrderBy(r => r.DangerZone)
+        .ToList();
     }
 
-    public IEnumerable<Product> ObtenerProductosBajoStock(List<Product> inventory)
+    public List<Product> ObtenerProductosBajoStock(List<Product> inventory)
     {
-        // En el juego real, esta iteración sería monitoreada por un temporizador (Time-Slice).
-        // Aquí usamos SkipWhile para saltar todo lo que está BIEN (stock > 75%)
-
-        // Devolvemos los productos que tienen stock bajo (los que quedan después del skip)
         return inventory
-            .OrderByDescending(p => p.CurrentStock)
-            .SkipWhile(p => ((float)p.CurrentStock / p.MaxStock) > 0.75f);
+            .Where(p => ((float)p.CurrentStock / p.MaxStock) <= 0.75f) // G1: Where (Filtro)
+            .OrderByDescending(p => p.CurrentStock)                    // G2: OrderByDescending (Orden)
+            .ToList();                                                 // G3: ToList (Ejecución inmediata)
+    }
+
+    public IEnumerator CheckInventoryHealthRoutine(List<Product> inventory, float maxTimeSlice, Action<Product> alertCallback)
+    {
+        float timer = Time.realtimeSinceStartup;
+
+        foreach (var p in inventory)
+        {
+            // Time-Slicing check
+            if (Time.realtimeSinceStartup - timer > maxTimeSlice)
+            {
+                yield return null; // Esperar al siguiente frame
+                timer = Time.realtimeSinceStartup;
+            }
+
+            // Chequeo de condición crítica (ej: stock 0)
+            if (p.CurrentStock <= 0)
+            {
+                alertCallback?.Invoke(p); // Notificamos
+                // No hacemos yield break aquí para seguir chequeando el resto, 
+                // a menos que solo quieras encontrar el primero.
+            }
+        }
     }
 
     public IEnumerable<Product> GetAllTheCatalogue(List<Providers> providers)
@@ -78,7 +109,6 @@ public class InventoryManager
     public (int ProductID, int Amount, decimal TotalCost) RequestRestoke(Product p, int amount)
     {
         decimal totalCost = amount * p.RestokeCost;
-        // ... lógica para actualizar el stock ...
         return (p.ID, amount, totalCost);
     }
 

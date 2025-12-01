@@ -16,16 +16,32 @@ public class ClientManager
 
     public List<QueueState> CalcularAggregate(List<Customer> queueClients)
     {
-        return queueClients
-            .GroupBy(c => c.order.FirstOrDefault())
-            .Select(g => new QueueState
+        var rawStats = queueClients.Aggregate(
+            new Dictionary<string, (float totalTime, int count)>(), // Semilla (Seed)
+            (acc, c) =>
             {
-                largestOrderItem = g.Key,
-                clientsCount = g.Count(),
-                averageWaitTime = g.Average(c => c.actualTimeInQueue)
-            })
-            .OrderByDescending(e => e.averageWaitTime)
-            .ToList();
+                // Lógica de agrupación dentro del Aggregate
+                string key = c.order.FirstOrDefault() ?? "Unknown";
+
+                if (!acc.ContainsKey(key))
+                    acc[key] = (0f, 0);
+
+                // Acumulamos tiempo y cantidad
+                acc[key] = (acc[key].totalTime + c.actualTimeInQueue, acc[key].count + 1);
+
+                return acc;
+            }
+        );
+
+        // Proyección final para mantener tu tipo de retorno original (List<QueueState>)
+        return rawStats.Select(kvp => new QueueState
+        {
+            largestOrderItem = kvp.Key,
+            clientsCount = kvp.Value.count,
+            averageWaitTime = kvp.Value.totalTime / kvp.Value.count
+        })
+        .OrderByDescending(e => e.averageWaitTime)
+        .ToList();
     }
 
     public (int ID, float finalTime, List<string> items) ToServeCustomer(Customer c)
@@ -64,22 +80,30 @@ public class ClientManager
         }
     }
 
-    public static bool CheckLackOfStock(List<Customer> queue, HashSet<string> availableItems, float maxTimeSlice)
+    public IEnumerator CheckLackOfStock(List<Customer> queue, HashSet<string> availableItems, float maxTimeSlice, System.Action<bool> resultCallback)
     {
-        // En una aplicaci�n real, aqu� iterar�as sobre un gran conjunto de datos
-        // y usar�as un temporizador para hacer 'yield return' o pausar si el tiempoMaximoSlice se agota.
+        float timer = Time.realtimeSinceStartup;
 
-        // Para el parcial, demostramos la intenci�n de usar 'Any'
-        // para buscar una condici�n que detenga la ejecuci�n tan pronto como se encuentre.
+        // G3: Any (Usado dentro de la lógica, pero la estructura principal es la coroutina)
+        foreach (var c in queue)
+        {
+            // Time-Slicing check
+            if (Time.realtimeSinceStartup - timer > maxTimeSlice)
+            {
+                yield return null; // Espera al siguiente frame
+                timer = Time.realtimeSinceStartup; // Resetea timer
+            }
 
+            // Lógica de chequeo
+            if (c.order.Any(item => !availableItems.Contains(item)))
+            {
+                resultCallback?.Invoke(true); // Devolvemos True a través del callback
+                yield break; // Cortamos la ejecución
+            }
+        }
 
-        return queue.Any(c =>
-            c.order.Any(item => !availableItems.Contains(item))
-        );
-
-        // Mantenemos la documentaci�n de que esta funci�n es parte del proceso de
-        // Time-Slicing para el chequeo de la cola.
-    }
+        resultCallback?.Invoke(false); // Si termina el loop, devolvemos False
+}
 
     public string GetQueueHealthReport(List<Customer> queueClients)
     {
@@ -111,9 +135,11 @@ public class ClientManager
 
     public int GetNextPriorityClientID(List<Customer> queue)
     {
-        // Llama al generator para obtener el primer cliente en la secuencia ordenada
-        var priorityCustomer = GetPriorityOrders(queue).FirstOrDefault();
+        var priorityCustomer = queue
+            .Where(c => c.order.Count > 0)          // GRUPO 1: Where
+            .OrderByDescending(c => c.order.Count)  // GRUPO 2: OrderByDescending
+            .FirstOrDefault();                      // GRUPO 3: FirstOrDefault (o podrías usar ToList().First())
 
-        return priorityCustomer?.ID ?? -1; // Devuelve el ID o -1 si la cola está vacía
+        return priorityCustomer?.ID ?? -1;
     }
 }
