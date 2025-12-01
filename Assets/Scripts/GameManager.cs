@@ -65,37 +65,37 @@ public class GameManager : MonoBehaviour
         MasterInventory.Add(new Product
         {
             ID = 1, Name = "Nail", Category = "Metal", SellPrice = 1.05m, RestokeCost = 1.00m, MaxStock = 50,
-            CurrentStock = 25
+            CurrentStock = Random.Range(0, 50)
         });
         MasterInventory.Add(new Product
         {
             ID = 2, Name = "Wire", Category = "Electronic", SellPrice = 1.5m, RestokeCost = 1.00m, MaxStock = 50,
-            CurrentStock = 40
+            CurrentStock = Random.Range(0, 40)
         });
         MasterInventory.Add(new Product
         {
             ID = 3, Name = "Screwdriver", Category = "Tool", SellPrice = 6m, RestokeCost = 5m, MaxStock = 80,
-            CurrentStock = 35
+            CurrentStock = Random.Range(0, 80)
         });
         MasterInventory.Add(new Product
         {
             ID = 4, Name = "Saw", Category = "Tool", SellPrice = 8m, RestokeCost = 5m, MaxStock = 30,
-            CurrentStock = 20
+            CurrentStock = Random.Range(0, 30)
         });
         MasterInventory.Add(new Product
         {
             ID = 5, Name = "Tube", Category = "Metal", SellPrice = 10m, RestokeCost = 12.5m, MaxStock = 120,
-            CurrentStock = 120
+            CurrentStock = Random.Range(0, 120)
         });
         MasterInventory.Add(new Product
         {
             ID = 6, Name = "Light bulb", Category = "Electronic", SellPrice = 3m, RestokeCost = 1.00m, MaxStock = 10,
-            CurrentStock = 6
+            CurrentStock = Random.Range(0, 10)
         });
         MasterInventory.Add(new Product
         {
             ID = 7, Name = "Screw", Category = "Metal", SellPrice = 0.50m, RestokeCost = 0.30m, MaxStock = 100,
-            CurrentStock = 5
+            CurrentStock = Random.Range(0, 100)
         }); // ¡Bajo stock a propósito!
 
         // Simular un proveedor (para el SelectMany del Integrante 2)
