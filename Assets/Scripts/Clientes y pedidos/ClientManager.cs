@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
+//Nacho - 1 linq, tupla, tipo anonimo, generator / 2 linq, Aggregate, Time Slicing
 public class ClientManager
 {
     public class QueueState

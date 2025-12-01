@@ -5,6 +5,8 @@ using UnityEngine;
 using System.Linq;
 using System.Text;
 
+
+//Celeste - 2 linq, generator, tupla y tipo anonimo / 1 linq, Aggregate, Time slicing
 public class InventoryManager
 {
     public class DangerReport

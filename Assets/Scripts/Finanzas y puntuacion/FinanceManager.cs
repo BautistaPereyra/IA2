@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
+//Bauti - 1 linq, tupla, tipo anonimo, generator / 2 linq, Aggregate, Time slicing
 public class FinanceManager
 {
 // Estructura de resultado para el Aggregate
@@ -25,9 +26,9 @@ public class FinanceManager
             {
                 Category = g.Key,
                 // Aggregate: Suma de Ingresos para esta categoría
-                TotalIncome = g.Sum(x => x.Item.SellPrice), 
+                TotalIncome = g.Sum(x => x.Item.SellPrice),
                 // Aggregate: Suma de Costos para esta categoría
-                TotalCost = g.Sum(x => x.Item.RestokeCost) 
+                TotalCost = g.Sum(x => x.Item.RestokeCost)
             })
             .OrderByDescending(r => r.NetProfit)
             .ToList();
